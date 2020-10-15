@@ -1,0 +1,42 @@
+1a. Yes it is the same, simply because the size of the parameters in conv-nets architectures
+depend only in the number of filters and their size at each layer.
+Each word get represented by a set of fixed amount of filters/kernels applied to each window on 1 dimension
+and those filters are directly corresponds to weights and as a result the amount of filters determines the size
+of the final embedding.
+
+
+1b. There must exist at least one window for all possible values of m_word.
+So, in case we assume that min(m_word) = 1. (no empty words)
+the size of the kernel is 5 and the the size of the word 
+is min(m_word)+2+(2*pad)= 1 + 2 + (2*pad), because the lowest value of m_word 
+determines the minimal required padding.
+So we want to fit 1 window with size 5,
+we need pad=1 so the we can apply at least 1 time the kernel to the word.
+
+1c. When projecting x_convout to the same vector space,
+we aim learn a linear operator that represent our x_convout better in terms
+of which of the applied max pooled kernels values (x_convout[i]) are important in our representation.
+When varying smoothly across the identity operator and some other operators, the net can
+"decide" either to leave the values (because the current representation is good) untouched
+or tweak some them to improve the embedding.
+
+because x_convout got ReLU one step before, all it's values are >= 0,
+so I think the bias should be negative, to reduce the total bias in the values
+passed to the sigmoid after the projection.
+
+1d. First is the parallel option, in our NMT model in order to get representation
+of the whole sequence to feed the decoder, we had to sequentially use the last hidden state 
+in each time step, in contrast to Transformers which you can compute the whole sequence representation
+in parallel for each word and then feed it to the next layer.
+
+Second is the self-attention and multi-head attention module, 
+in BiLSTM encoder we also try to get "attention" to our context by feeding the next
+time step in the last hidden state which controlled by gates, but in practice
+if the sequence is long, the information of far word in our context can literally 
+be "forgotten" over time steps, in contrast to Transformer where we directly use all of
+ context using the self-attention mechanism. (weight sum which determines which of the words
+ in the context are important while encoding).
+ 
+ The third is the multi-head attention which helps the net to track many "patterns"
+ while encoding, just like gaining many activation maps in CNNs and learn a lot of filters in an image
+ where each of them is responsible to detect it's own pattern.
