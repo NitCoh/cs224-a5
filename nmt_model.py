@@ -83,6 +83,16 @@ class NMT(nn.Module):
         ###     - Add `target_padded_chars` for character level padded encodings for target
         ###     - Modify calls to encode() and decode() to use the character level encodings
 
+        print("-"*80)
+        print(self.device)
+        target_padded = self.vocab.tgt.to_input_tensor(target, device=self.device)   # Tensor: (tgt_len, b)
+        source_padded_chars = self.vocab.src.to_input_tensor_char(source, device=self.device)  # (max_sentence_length, batch_size, max_word_length)
+        target_padded_chars = self.vocab.tgt.to_input_tensor_char(target, device=self.device)  # (max_sentence_length, batch_size, max_word_length)
+
+        enc_hiddens, dec_init_state = self.encode(source_padded_chars, source_lengths)
+        enc_masks = self.generate_sent_masks(enc_hiddens, source_lengths)
+        combined_outputs = self.decode(enc_hiddens, enc_masks, dec_init_state, target_padded_chars)
+
         ### END YOUR CODE
 
         P = F.log_softmax(self.target_vocab_projection(combined_outputs), dim=-1)
@@ -128,6 +138,25 @@ class NMT(nn.Module):
         ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
         ### Except replace "self.model_embeddings.source" with "self.model_embeddings_source"
 
+        # https://i.stack.imgur.com/SjnTl.png ---> best photo for multi-layer LSTM
+        #source_padded: (src_len, b) ==(apply_embed)=> (src_len, b, e)
+        x = self.model_embeddings_source(source_padded)
+        x_packed = nn.utils.rnn.pack_padded_sequence(x, torch.tensor(source_lengths))
+        # tensor containing the output features (h_t) from the last layer of the LSTM, for each t.
+        # hn shape: (num_layers * num_directions, batch, hidden_size)
+        # cn shape: (num_layers * num_directions, batch, hidden_size)
+        output_packed, (hn, cn) = self.encoder(x_packed)
+        # hn shape (2, b, h) => (b, 2h)
+        h_fwd, h_bwd = hn[0], hn[1]  # (b, h) each
+        hn_enc = torch.cat((h_fwd, h_bwd), 1)  # (b,2h)
+        init_decoder_hidden = self.h_projection(hn_enc)
+        c_fwd, c_bwd = cn[0], cn[1]
+        cn_enc = torch.cat((c_fwd, c_bwd), 1)
+        init_decoder_cell = self.c_projection(cn_enc)
+        dec_init_state = init_decoder_hidden, init_decoder_cell
+        output, lengths = nn.utils.rnn.pad_packed_sequence(output_packed)  # output shape (src_len, b, h*2)
+        enc_hiddens = output.permute(1, 0, 2)  # (b, src_len, h*2)
+
         ### END YOUR CODE FROM ASSIGNMENT 4
 
         return enc_hiddens, dec_init_state
@@ -160,6 +189,19 @@ class NMT(nn.Module):
 
         ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
         ### Except replace "self.model_embeddings.target" with "self.model_embeddings_target"
+
+        # (b, src_len, h*2)
+        enc_hiddens_proj = self.att_projection(enc_hiddens)  # (b, src_len, h)
+        Y = self.model_embeddings_target(target_padded)  # (tgt_len, b, e)
+        splitted_steps = torch.split(Y, 1, dim=0)
+        for t in splitted_steps:  # t shape: (1, b, e)
+            t_sq = torch.squeeze(t)  # (b, e)
+            Ybar_t = torch.cat((t_sq, o_prev), dim=1)  # (b, e+h)
+            (next_hiddens, next_cells), o_t, e_t = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)
+            combined_outputs.append(o_t)
+            o_prev = o_t
+
+        combined_outputs = torch.stack(combined_outputs)
 
         ### END YOUR CODE FROM ASSIGNMENT 4
 
@@ -194,6 +236,16 @@ class NMT(nn.Module):
 
         ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
 
+        # Watt_proj @ h_enc_i = h,1
+        # enc_hidden = (b, src_len, h*2) ->  (b, src_len, h) => (b, src_len, 2h) @ (b, 2h, h) : x(W.T)
+        dec_prev_h, dec_prev_c = dec_state
+        dec_hidden_t, dec_cell_t = dec_state = self.decoder(Ybar_t, (dec_prev_h, dec_prev_c))  # (b, h)
+        # we multiply each encoder hidden state i,
+        # with the decoder current hidden state to obtain scalar called attention score.
+        # (b,h) @ (b, src_len, h) --->  (b,1, h) @ (b, h, src_len) --> (b, 1, src_len)
+        e_t = torch.bmm(torch.unsqueeze(dec_hidden_t, 1), enc_hiddens_proj.permute(0, 2, 1))  # (b, 1, src_len)
+        e_t = torch.squeeze(e_t, 1)  # output : (b, src_len)
+
         ### END YOUR CODE FROM ASSIGNMENT 4
 
         # Set e_t to -inf where enc_masks has 1
@@ -201,6 +253,17 @@ class NMT(nn.Module):
             e_t.data.masked_fill_(enc_masks.bool(), -float('inf'))
 
         ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
+
+        # alpha_t is a tensor size src_len (batched) that each entry i, has the attention soft-max score.
+        alpha_t = torch.nn.functional.softmax(e_t, dim=1)  # (b, src_len)
+        alpha_t = alpha_t.unsqueeze(dim=1)  # (b,1,src_len)
+        # alpha_t(b, 1, src_len) @ enc_hiddens:(b, src_len, 2h) => (b,1,2h)
+        a_t = alpha_t.bmm(enc_hiddens)  # (b, 1, 2h)
+        a_t = a_t.squeeze(dim=1)  # (b, 2h)
+
+        U_t = torch.cat((a_t, dec_hidden_t), dim=1)  # (b, 3h)
+        V_t = self.combined_output_projection(U_t)  # (b, h)
+        O_t = self.dropout(V_t.tanh())
 
         ### END YOUR CODE FROM ASSIGNMENT 4
 

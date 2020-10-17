@@ -39,6 +39,13 @@ class ModelEmbeddings(nn.Module):
         super(ModelEmbeddings, self).__init__()
 
         ### YOUR CODE HERE for part 1h
+        self.word_embed_size = word_embed_size
+        self.vocab = vocab
+        self.e_char = 50
+        self.embed = nn.Embedding(num_embeddings=len(self.vocab.char2id), embedding_dim=self.e_char)
+        self.cnn = CNN(self.e_char, self.word_embed_size)
+        self.highway = Highway(self.word_embed_size)
+        self.dropout = nn.Dropout(0.3)
 
         ### END YOUR CODE
 
@@ -52,6 +59,15 @@ class ModelEmbeddings(nn.Module):
             CNN-based embeddings for each word of the sentences in the batch
         """
         ### YOUR CODE HERE for part 1h
+        (sentence_length, batch_size, max_word_length) = input.shape
+        x_embed = self.embed(input)  # (sentence_length, b, m_word, e_char)
+        x_reshaped_tag = x_embed.permute(0, 1, 3, 2)  # (sentence_length, b, e_char, m_word)
+        x_reshaped = x_reshaped_tag.view(-1, self.e_char, max_word_length)  # (sentence_length * b, e_char, m_word)
+        x_conv = self.cnn(x_reshaped)  # (sentence_length * b, word_embed)
+        x_highway = self.highway(x_conv)  # (sentence_length * b, word_embed)
+        x_word_embed = self.dropout(x_highway.view(sentence_length, batch_size, self.word_embed_size))  # # (sentence_length, b, word_embed)
+        return x_word_embed
+
 
         ### END YOUR CODE
 
