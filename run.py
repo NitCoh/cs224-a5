@@ -160,7 +160,6 @@ def train(args: Dict):
     ##########################################################################################
     # load model
     print("--"*40)
-    print("loading model params, begin training with lr: {}".format(args['--lr']))
     params = torch.load(model_save_path, map_location=lambda storage, loc: storage)
     model.load_state_dict(params['state_dict'])
     model = model.to(device)
@@ -168,7 +167,7 @@ def train(args: Dict):
     print('restore parameters of the optimizers', file=sys.stderr)
     optimizer.load_state_dict(torch.load(model_save_path + '.optim'))
     print('optimizer loaded lr: {}'.format(optimizer.param_groups[0]['lr']))
-    lr = args['--lr']
+    lr = optimizer.param_groups[0]['lr'] * float(args['--lr-decay'])
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
