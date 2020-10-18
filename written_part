@@ -40,3 +40,52 @@ be "forgotten" over time steps, in contrast to Transformer where we directly use
  The third is the multi-head attention which helps the net to track many "patterns"
  while encoding, just like gaining many activation maps in CNNs and learn a lot of filters in an image
  where each of them is responsible to detect it's own pattern.
+ 
+ 
+ 
+###Analysing NMT:
+
+##a
+traduces, traduzca, tranduzcas are the words that don't occur in our spanish vocab.
+The problem is that when we encode/decode with our word-based NMT system,
+those words will appear as <unk> encoding/decoding, even though we have the "base" word in our vocab.
+Our character-aware NMT will encode the word through it's characters which all appear in the vocab,
+therefore we won't use the <unk> embeddings and also while decoding, when we encounter any OOV word,
+we will apply the char-decoder which will may generate different forms of the "base" words, though
+won't output <unk>.
+ 
+##b
+
+word - close neighbour:
+Word2Vec:
+- financial - economic
+- neuron - nerve
+- Francisco - san
+- naturally - occurring
+- expectation - norms
+
+character-aware NMT embeddings:
+- financial - vertical
+- neuron - Newton
+- Francisco - France
+- naturally - practically
+- expectation - exception
+
+The similarity modeled by Word2Vec is mostly the context similarity, which means
+if word A mostly seen context is the context mostly seen by B, they are probably similar.
+In contrast to character-aware NMT, which model the morphological similarity between words,
+e.g naturally - practically, there is no close-meaning similarity between them, but
+morphologically they are build almost the same.
+
+##c
+src: Puedo vestirme como agricultor, o con ropa de cuero, y nunca nadie ha elegido un agricultor.
+ref: You can have me as a farmer, or in leathers,  and no one has ever chose farmer.
+a4NMT: I can <unk> like farmer, or with leather <unk> and no one has chosen a farmer.
+a5NMT: I can dress as a farmer, or a leather clothing, and never ever chose a farmer.
+
+
+src: Mi crculo comenz en los aos '60 en la escuela media, en Stow, Ohio donde yo era el raro de la clase.
+ref: My circle began back in the '60s  in high school in Stow, Ohio  where I was the class queer.
+a4NMT: My circle started in the year <unk> at the middle school, in Ohio -- where I was the rare of the class.
+a5NMT: My circle started in the 1960s in the middle school, in State, Ohio, where I was the rare of class.
+

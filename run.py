@@ -156,6 +156,22 @@ def train(args: Dict):
     train_time = begin_time = time.time()
     print('begin Maximum Likelihood training')
 
+
+    ##########################################################################################
+    # load model
+    print("--"*40)
+    print("loading model params, begin training with lr: {}".format(args['--lr']))
+    params = torch.load(model_save_path, map_location=lambda storage, loc: storage)
+    model.load_state_dict(params['state_dict'])
+    model = model.to(device)
+
+    print('restore parameters of the optimizers', file=sys.stderr)
+    optimizer.load_state_dict(torch.load(model_save_path + '.optim'))
+    print('optimizer loaded lr: {}'.format(optimizer.param_groups[0]['lr']))
+    print("--"*40)
+
+    ##########################################################################################
+
     while True:
         epoch += 1
 
