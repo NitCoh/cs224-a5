@@ -168,6 +168,12 @@ def train(args: Dict):
     print('restore parameters of the optimizers', file=sys.stderr)
     optimizer.load_state_dict(torch.load(model_save_path + '.optim'))
     print('optimizer loaded lr: {}'.format(optimizer.param_groups[0]['lr']))
+    lr = args['--lr']
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+    print('optimizer changed lr: {}'.format(optimizer.param_groups[0]['lr']))
+
     print("--"*40)
 
     ##########################################################################################
