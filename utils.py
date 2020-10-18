@@ -65,6 +65,11 @@ def pad_sents(sents, pad_token):
 
     ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
 
+    max_length = len(max(sents, key=len))
+    for sen in sents:
+        sen.extend([pad_token] * (max_length - len(sen)))
+        sents_padded.append(sen)
+
     ### END YOUR CODE FROM ASSIGNMENT 4
 
     return sents_padded

@@ -151,7 +151,7 @@ class VocabEntry(object):
         ### YOUR CODE HERE for part 1e
         x_batch = self.words2charindices(sents)  # list[list[list[int]]]
         x_batch_padded = pad_sents_char(x_batch, self.char_pad)  # (batch_size, max_sentence_length, max_word_length)
-        return torch.tensor(x_batch_padded, dtype=torch.long, device=device).transpose(1, 0)  # tensor (max_sentence_length,batch_size, max_word_length)
+        return torch.tensor(x_batch_padded, device=device).transpose(1, 0).contiguous()  # tensor (max_sentence_length,batch_size, max_word_length)
 
         ### TODO:
         ###     - Use `words2charindices()` from this file, which converts each character to its corresponding index in the

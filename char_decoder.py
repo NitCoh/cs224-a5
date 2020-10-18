@@ -35,6 +35,11 @@ class CharDecoder(nn.Module):
         """
         ### YOUR CODE HERE for part 2a
         ### TODO - Implement the forward pass of the character decoder.
+        embeds = self.decoderCharEmb(input)  # (length, batch_size, e_char)
+        hiddens, dec_hidden = self.charDecoder(embeds, dec_hidden)  # hiddens: (l, b, (directions=1) * h), dec_hidden:  tuple(tensor(1 * 1, b, h))
+        S_t = self.char_output_projection(hiddens)  # (length, batch_size, self.vocab_size)
+
+        return S_t, dec_hidden
 
         ### END YOUR CODE
 
@@ -53,6 +58,14 @@ class CharDecoder(nn.Module):
         ###       - char_sequence corresponds to the sequence x_1 ... x_{n+1} (e.g., <START>,m,u,s,i,c,<END>). Read the handout about how to construct input and target sequence of CharDecoderLSTM.
         ###       - Carefully read the documentation for nn.CrossEntropyLoss and our handout to see what this criterion have already included:
         ###             https://pytorch.org/docs/stable/nn.html#crossentropyloss
+
+        S_t, dec_hidden = self.forward(input=char_sequence[:-1], dec_hidden=dec_hidden) # S_t: (length, batch_size, self.vocab_size)
+        loss_fn = nn.CrossEntropyLoss(ignore_index=self.target_vocab.char_pad, reduction='sum')
+        # We need to stack all the words together in one 2d tensor instead of 3d tensor, divided to batches of words (b, l, vocab_size)
+        S_t_batched = S_t.view(-1, len(self.target_vocab.char2id))  # (batch * length, char_vocab_size)
+        targets = char_sequence[1:].contiguous().view(-1)  # (length-1) * batch_size
+        loss = loss_fn(S_t_batched, targets)  # tensor(scalar)
+        return loss
 
         ### END YOUR CODE
 
@@ -76,5 +89,25 @@ class CharDecoder(nn.Module):
         ###      - We use curly brackets as start-of-word and end-of-word characters. That is, use the character '{' for <START> and '}' for <END>.
         ###        Their indices are self.target_vocab.start_of_word and self.target_vocab.end_of_word, respectively.
 
+        _, batch_size, hidden_size = initialStates[0].shape
+        decodedWords = [""] * batch_size
+        current_char_idx = self.target_vocab.start_of_word
+        current_char_idx = torch.tensor([current_char_idx] * batch_size, device=device).unsqueeze(0)  #(1, batch_size)
+        h_prev, c_prev = initialStates
+        for t in range(max_length):
+
+            _, (h_new, c_new) = self.forward(current_char_idx, (h_prev, c_prev))  # h_new shape: (1, batch, hidden_size)
+            scores = self.char_output_projection(h_new.squeeze(0))  # (batch, vocab_size)
+            probs = torch.softmax(scores, dim=1)
+            indices = torch.argmax(probs, dim=1).tolist()  # size: batch
+            current_char_idx = torch.tensor(indices, device=device).unsqueeze(0)  # (1, batch_size)
+            h_prev, c_prev = h_new, c_new
+            chars = [self.target_vocab.id2char[i] for i in indices]   # size: batch
+            decodedWords = [cur_string+c for c, cur_string in zip(chars, decodedWords)]  # size: batch
+
+        # truncate
+        decodedWords = [x.partition("}")[0] for x in decodedWords]
+
+        return decodedWords
         ### END YOUR CODE
 
